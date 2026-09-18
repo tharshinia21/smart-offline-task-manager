@@ -1,0 +1,46 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: smart_tasks_mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: smart-tasks
+    volumes:
+      - mongo_data:/data/db
+
+  mongo-express:
+    image: mongo-express:1.0.2
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    depends_on:
+      - mongo
+
+  server:
+    build: ./server
+    container_name: smart_tasks_server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo:27017/smart-tasks
+      JWT_SECRET: change_this_super_secret_in_prod
+    depends_on:
+      - mongo
+
+  client:
+    build: ./client
+    container_name: smart_tasks_client
+    ports:
+      - "5173:80"
+    depends_on:
+      - server
+
+volumes:
+  mongo_data:
