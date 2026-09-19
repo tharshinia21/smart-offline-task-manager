@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db } from '../db/database'
-import { requestPermission, nextAllowedTime } from '../notifications/notificationManager'
+import { requestPermission, nextAllowedTime, subscribePush, syncPushSubscriptionToServer, unsubscribePush, showBrowserNotification } from '../notifications/notificationManager'
 import { getPendingSyncCount, fullSync, isOnline } from '../sync/syncEngine'
 import { getUser, logout } from '../sync/auth'
 
@@ -13,9 +13,24 @@ export default function Settings(){
 
   useEffect(()=>{ getPendingSyncCount().then(setPending); const id=setInterval(()=>getPendingSyncCount().then(setPending),2000); return ()=>clearInterval(id)},[])
 
+  const [pushOn, setPushOn]=useState(false)
   const enableNotif=async()=>{
     const p=await requestPermission()
     setNotif(p)
+    if(p==='granted' && localStorage.getItem('access_token')){
+      const sub=await subscribePush()
+      if(sub){ await syncPushSubscriptionToServer(sub as any); setPushOn(true); alert('Background alarm enabled (push subscribed)')}
+    }
+  }
+  const togglePush=async()=>{
+    if(pushOn){ await unsubscribePush(); setPushOn(false); alert('Push unsubscribed - foreground only') }
+    else { const sub=await subscribePush(); if(sub){ await syncPushSubscriptionToServer(sub as any); setPushOn(true); alert('Push subscribed')} else alert('Push failed - check VAPID/HTTPS/permission')}
+  }
+  const testAlarm=async()=>{
+    const v=(await import('../db/database')).db
+    const tasks=await v.tasks.filter((t:any)=>!t.deletedAt).toArray()
+    if(!tasks.length) return alert('No tasks')
+    await showBrowserNotification(tasks[0] as any)
   }
 
   const doSync=async()=>{
@@ -50,10 +65,14 @@ export default function Settings(){
         </section>
 
         <section className="rounded-2xl border bg-white p-4">
-          <h2 className="font-semibold">Notifications</h2>
-          <p className="text-sm text-zinc-500">Permission: {notif}</p>
-          <button onClick={enableNotif} className="mt-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Enable Notifications</button>
-          <p className="mt-2 text-xs text-zinc-500">Reminders respect quiet hours 11PM-7AM. Priority: Low=none, Medium/High=daily 9AM, Very High/Critical=every 4h (7,11,15,19), Overdue=daily.</p>
+          <h2 className="font-semibold">Notifications (Alarm-like)</h2>
+          <p className="text-sm text-zinc-500">Permission: {notif} {pushOn?'• Push ON (background alarm)':'• Push OFF (foreground only)'}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button onClick={enableNotif} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white">Enable Notifications</button>
+            <button onClick={togglePush} className="rounded-xl border px-4 py-2 text-sm">{pushOn?'Disable Push':'Enable Background Push'}</button>
+            <button onClick={testAlarm} className="rounded-xl border px-4 py-2 text-sm">🔔 Test Alarm</button>
+          </div>
+          <p className="mt-2 text-xs text-zinc-500">Foreground: vibrate + sticky toast every 60s poll. Background (Phase B): Redis+BullMQ via Web Push even when tab closed — requires login + VAPID + HTTPS/PWA. Quiet 11PM-7AM suppressed.</p>
         </section>
 
         <section className="rounded-2xl border bg-white p-4">

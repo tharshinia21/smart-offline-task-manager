@@ -15,7 +15,11 @@ export class Device {
   deviceType: string
 
   @Prop({ type: Object })
-  pushSubscription?: any
+  pushSubscription?: {
+    endpoint: string
+    expirationTime?: number | null
+    keys: { p256dh: string; auth: string }
+  }
 
   @Prop()
   lastSyncAt?: Date

@@ -91,12 +91,82 @@ export function startReminderLoop(onNotify: (task: Task) => void, getTasks: () =
   return () => { if (timer) window.clearInterval(timer) }
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4)
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+  const raw = atob(base64)
+  const output = new Uint8Array(raw.length)
+  for (let i=0;i<raw.length;++i) output[i]=raw.charCodeAt(i)
+  return output
+}
+
+export async function subscribePush(): Promise<PushSubscription | null> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null
+  const perm = await requestPermission()
+  if (perm !== 'granted') return null
+  const reg = await navigator.serviceWorker.ready
+  const existing = await reg.pushManager.getSubscription()
+  if (existing) return existing
+  // fetch VAPID public key from server
+  let vapid = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY as string | undefined
+  if (!vapid) {
+    try {
+      const API = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api'
+      const token = localStorage.getItem('access_token')
+      const res = await fetch(`${API}/notifications/vapid-public-key`, { headers: token? { Authorization: `Bearer ${token}` }: {} })
+      if (res.ok) { const j=await res.json(); vapid=j.publicKey }
+    } catch {}
+  }
+  if (!vapid) return null
+  try {
+    return await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlBase64ToUint8Array(vapid) } as any)
+  } catch { return null }
+}
+
+export async function syncPushSubscriptionToServer(sub: PushSubscription){
+  const API = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api'
+  const token = localStorage.getItem('access_token')
+  if (!token) return
+  await fetch(`${API}/notifications/subscribe`, { method:'POST', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`}, body: JSON.stringify({ subscription: sub.toJSON(), deviceName: navigator.userAgent.slice(0,120), deviceType: /Mobi|Android/i.test(navigator.userAgent)?'mobile':'desktop' }) }).catch(()=>{})
+}
+
+export async function unsubscribePush(){
+  if (!('serviceWorker' in navigator)) return
+  const reg = await navigator.serviceWorker.ready
+  const sub = await reg.pushManager.getSubscription()
+  if (!sub) return
+  const endpoint = (sub as any).endpoint
+  await sub.unsubscribe().catch(()=>{})
+  const API = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000/api'
+  const token = localStorage.getItem('access_token')
+  if (token) await fetch(`${API}/notifications/subscribe`, { method:'DELETE', headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`}, body: JSON.stringify({ endpoint }) }).catch(()=>{})
+}
+
 export async function showBrowserNotification(task: Task) {
   const perm = await requestPermission()
   if (perm !== 'granted') return
   const p = getPriority(task, new Date())
   const { title, body, tag } = buildNotificationContent(task, p)
+  // Prefer SW showNotification for alarm-like (vibrate, actions, sticky)
   try {
-    new Notification(title, { body, tag, requireInteraction: p === 'critical' || p === 'overdue' } as NotificationOptions)
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      // @ts-ignore
+      await (reg as any).showNotification(title, {
+        body, tag, icon:'/pwa-512x512.png', badge:'/favicon.svg',
+        vibrate: [200,100,200,100,500], requireInteraction: true, renotify: true, silent:false,
+        data:{ taskId: task.id, url: task.link || `/tasks/${task.id}` },
+        actions: [{action:'done', title:'✓ Done'}, {action:'start', title:'▶ Start'}, {action:'snooze', title:'⏸ Snooze'}]
+      })
+      // alarm sound for critical/overdue via Audio (best effort, may need gesture)
+      if (p==='critical' || p==='overdue') {
+        try { const a=new Audio('/alarm.wav'); a.volume=0.9; a.play().catch(()=>{}); if(navigator.vibrate) navigator.vibrate([400,100,400]) } catch {}
+      }
+      return
+    }
+  } catch {}
+  try {
+    new Notification(title, { body, tag, requireInteraction: true } as NotificationOptions)
+    if (navigator.vibrate) navigator.vibrate([200,100,200])
   } catch {}
 }

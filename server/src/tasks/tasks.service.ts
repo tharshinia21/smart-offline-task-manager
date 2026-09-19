@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
+import { Injectable, NotFoundException, ForbiddenException, Inject, forwardRef, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
 import { Task } from '../schemas/task.schema'
@@ -17,7 +17,10 @@ const createSchema = z.object({
 
 @Injectable()
 export class TasksService {
+  private readonly logger = new Logger(TasksService.name)
   constructor(@InjectModel(Task.name) private taskModel: Model<Task>) {}
+  private notifSvc: any = null
+  setNotificationsService(svc:any){ this.notifSvc = svc }
 
   async list(userId: string) {
     return this.taskModel.find({ userId, deletedAt: { $exists: false } as any }).sort({ updatedAt: -1 }).lean()
@@ -42,6 +45,7 @@ export class TasksService {
       version: 1,
       clientId: data.id,
     })
+    if (this.notifSvc) this.notifSvc.scheduleForTask(doc).catch((e:any)=>this.logger.warn(e.message))
     return doc
   }
 
@@ -55,6 +59,7 @@ export class TasksService {
     }
     Object.assign(existing, { ...data, version: existing.version + 1 })
     await existing.save()
+    if (this.notifSvc) this.notifSvc.scheduleForTask(existing).catch((e:any)=>this.logger.warn(e.message))
     return existing
   }
 
@@ -64,6 +69,7 @@ export class TasksService {
     t.deletedAt = Date.now()
     t.version += 1
     await t.save()
+    if (this.notifSvc) this.notifSvc.cancelForTask(t._id.toString()).catch(()=>{})
     return { deleted: true }
   }
 
@@ -79,6 +85,7 @@ export class TasksService {
     t.snoozedUntil = Date.now() + mins * 60000
     t.version += 1
     await t.save()
+    if (this.notifSvc) this.notifSvc.scheduleForTask(t).catch(()=>{})
     return t
   }
   async reschedule(userId: string, id: string, dueDate: string, dueTime: string) {

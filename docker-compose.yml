@@ -1,4 +1,14 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: smart_tasks_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
   mongo:
     image: mongo:7
     container_name: smart_tasks_mongo
@@ -31,8 +41,13 @@ services:
       PORT: 3000
       MONGODB_URI: mongodb://mongo:27017/smart-tasks
       JWT_SECRET: change_this_super_secret_in_prod
+      VAPID_PUBLIC_KEY: BKs-qGrloipRm1Fm_N-8LK4kiopBlhkd457f2aB1sL-i27JSdaT3oCQ_Ixl336wgwdFOPPP_WB5iWw5a8WdLDYk
+      VAPID_PRIVATE_KEY: C7HQjh-OiSlp01RF28gfkk1XsIIVtg-6-1K_idV-7RY
+      VAPID_SUBJECT: mailto:admin@smarttasks.local
+      REDIS_URL: redis://redis:6379
     depends_on:
       - mongo
+      - redis
 
   client:
     build: ./client
@@ -44,3 +59,4 @@ services:
 
 volumes:
   mongo_data:
+  redis_data:

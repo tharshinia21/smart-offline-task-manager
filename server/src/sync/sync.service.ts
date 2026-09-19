@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, Logger } from '@nestjs/common'
 import { InjectModel } from '@nestjs/mongoose'
 import { Model } from 'mongoose'
 import { Task } from '../schemas/task.schema'
@@ -11,6 +11,9 @@ import { Task } from '../schemas/task.schema'
  */
 @Injectable()
 export class SyncService {
+  private readonly logger = new Logger(SyncService.name)
+  private notifSvc:any=null
+  setNotificationsService(s:any){ this.notifSvc=s }
   constructor(@InjectModel(Task.name) private taskModel: Model<Task>) {}
 
   async push(userId: string, changes: any[]) {
@@ -21,7 +24,7 @@ export class SyncService {
           const existing = c.payload?.id ? await this.taskModel.findOne({ clientId: c.payload.id, userId }) : null
           if (existing) { results.push({ taskId: c.taskId, status: 'already_exists', server: existing }); continue }
           const p = c.payload
-          const doc = await this.taskModel.create({
+           const doc = await this.taskModel.create({
             userId,
             title: p.title,
             dueDate: p.dueDate,
@@ -35,7 +38,8 @@ export class SyncService {
             deletedAt: p.deletedAt,
             snoozedUntil: p.snoozedUntil,
           })
-          results.push({ taskId: c.taskId, status: 'created', server: doc })
+           if (this.notifSvc) this.notifSvc.scheduleForTask(doc).catch(()=>{})
+           results.push({ taskId: c.taskId, status: 'created', server: doc })
         } else if (c.operation === 'update') {
           let server: any = null
           // try _id then clientId
@@ -47,19 +51,21 @@ export class SyncService {
             results.push({ taskId: c.taskId, status: 'conflict', server, clientVersion: c.version })
             continue
           }
-          Object.assign(server, { ...c.payload, version: server.version + 1 })
-          // don't overwrite userId/_id
-          server.userId = userId
-          await server.save()
-          results.push({ taskId: c.taskId, status: 'updated', server })
+           Object.assign(server, { ...c.payload, version: server.version + 1 })
+           // don't overwrite userId/_id
+           server.userId = userId
+           await server.save()
+           if (this.notifSvc) this.notifSvc.scheduleForTask(server).catch(()=>{})
+           results.push({ taskId: c.taskId, status: 'updated', server })
         } else if (c.operation === 'delete') {
           let server: any = await this.taskModel.findOne({ _id: c.taskId, userId })
           if (!server) server = await this.taskModel.findOne({ clientId: c.taskId, userId })
           if (!server) { results.push({ taskId: c.taskId, status: 'not_found' }); continue }
-          server.deletedAt = Date.now()
-          server.version += 1
-          await server.save()
-          results.push({ taskId: c.taskId, status: 'deleted', server })
+           server.deletedAt = Date.now()
+           server.version += 1
+           await server.save()
+           if (this.notifSvc) this.notifSvc.cancelForTask(server._id.toString()).catch(()=>{})
+           results.push({ taskId: c.taskId, status: 'deleted', server })
         }
       } catch (e: any) {
         results.push({ taskId: c.taskId, status: 'error', error: e.message })

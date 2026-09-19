@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { AuthModule } from './auth/auth.module'
 import { TasksModule } from './tasks/tasks.module'
 import { SyncModule } from './sync/sync.module'
+import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { SyncModule } from './sync/sync.module'
     AuthModule,
     TasksModule,
     SyncModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
