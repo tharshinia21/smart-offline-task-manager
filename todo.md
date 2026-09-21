@@ -1,2268 +1,539 @@
-# Smart Offline Task Manager
+# Offline Background Reminder & Notification System
+## Objective
+Implement a reliable reminder system for the existing offline-first task manager application.
 
-## 1. Project Overview
+The application is currently built using **HTML, CSS, and JavaScript** and primarily runs in **Chrome as a PWA**. Do **not** rewrite the existing application or convert the entire project into a traditional Android application unless it is technically necessary for reliable background scheduling.
 
-**Smart Offline Task Manager** is an offline-first, cross-device task management Progressive Web App (PWA) designed to reduce the amount of manual task management required from the user.
+The goal is to make task reminders work even when:
 
-Unlike a traditional Todo application where the user manually assigns priorities and repeatedly checks deadlines, this system automatically determines task urgency from the remaining time before the deadline and dynamically adjusts reminder frequency.
+- the PWA is not currently open,
+- the user is using another application,
+- the screen is locked,
+- and the PWA/browser page has been closed.
 
-The application is designed for:
-
-- Windows laptops
-- Android phones
-- Other modern browsers/devices that support PWA features
-
-The application continues to work without an internet connection. Each device maintains a local copy of the user's tasks, and changes are synchronized with the central server when connectivity becomes available.
-
-### Core Philosophy
-
-> **Minimum input from the user, maximum automation from the system.**
-
-The user mainly provides:
-
-1. Task title
-2. Due date
-3. Due time
-4. Optional link
-
-The system handles:
-
-- Automatic priority calculation
-- Priority escalation
-- Reminder scheduling
-- Notification frequency
-- Quiet hours
-- Cross-device synchronization
-- Conflict detection
-- Notification actions
-- Overdue handling
+The reminder must behave like a **normal notification/reminder**, NOT like an alarm clock.
 
 ---
 
-# 2. Problem Being Solved
+## 1. Reminder Behavior
 
-Traditional Todo applications generally require the user to:
+When a user creates or edits a task, they should be able to configure a reminder date and time.
 
-- Manually assign priorities
-- Constantly check deadlines
-- Remember when to start a task
-- Open the application to update task status
-- Manually synchronize information between devices
-- Depend heavily on internet connectivity
+Example:
 
-For example:
+> Task: Complete Java Assignment
+> Reminder: 7:30 PM
 
-> Complete CN Assignment — Due tomorrow at 6:00 PM.
+At the scheduled time, the application should trigger a reminder.
 
-A conventional Todo application may simply show:
+The reminder should be associated with the correct task and should contain enough information for the user to understand what needs to be done.
 
-> Due tomorrow
+---
 
-The Smart Offline Task Manager instead understands that the deadline is approaching and automatically increases the task's urgency.
+## 2. This Is NOT an Alarm Clock
 
-The task may progress:
+Do **not** implement the reminder as an alarm-clock-style alert.
 
-```text
-LOW
-  ↓
-MEDIUM
-  ↓
-HIGH
-  ↓
-VERY HIGH
-  ↓
-CRITICAL
-  ↓
-OVERDUE
+The reminder must:
+
+- respect the phone's normal notification behavior,
+- respect Silent mode,
+- respect normal notification sound settings,
+- respect vibration settings,
+- respect Do Not Disturb/system notification policies,
+- never force the device speaker to play a sound,
+- never bypass Silent mode,
+- never continuously ring,
+- never behave like an emergency/alarm notification.
+
+If the phone is silent, the reminder should remain silent.
+
+If the phone is configured to vibrate for notifications, it should follow that behavior.
+
+If normal notification sounds are enabled, it may use the normal notification sound.
+
+---
+
+## 3. When the PWA Is Open
+
+When the user is currently using the application at the reminder time, display a **custom bottom-sheet reminder UI**.
+
+Do NOT use a simple browser alert such as:
+
+```javascript
+alert("Reminder");
 ```
 
-The reminder frequency changes accordingly.
-
----
-
-# 3. Main User Experience
-
-The application should deliberately have a **simple and clean interface**.
-
-It should **not** put every feature into one giant page.
-
-Instead, the application uses multiple dynamically routed pages. Each major function has its own page, while reusable components are shared across pages.
-
-The UI principle is:
-
-> **Separate pages, simple interfaces, shared components.**
-
----
-
-# 4. Task Input
-
-The primary task creation interface should use separate, simple input fields rather than requiring the user to write a long natural-language sentence.
+Instead, create a polished, responsive bottom-sheet component that slides upward from the bottom of the screen.
 
 Example:
 
 ```text
-┌─────────────────────────────────────────────┐
-│ Add a task                                  │
-│                                             │
-│ Complete CN Assignment                      │
-│                                             │
-│ 📅 Sep 30       🕐 6:00 PM       🔗         │
-│                                             │
-│                         + Add Task           │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────┐
+│                                 │
+│          Application UI         │
+│                                 │
+├─────────────────────────────────┤
+│ 🔔  Task Reminder               │
+│                                 │
+│ Complete Java Assignment        │
+│ Due now                         │
+│                                 │
+│ [ ✓ Done ]   [ Snooze ]         │
+│                                 │
+│        [ Reschedule ]            │
+│                                 │
+└─────────────────────────────────┘
 ```
 
-### Required Fields
+The bottom sheet should provide at least:
 
-- Task title
-- Due date
-- Due time
+- **Done**
+- **Snooze**
+- **Reschedule**
+- **Dismiss**
 
-### Optional Field
-
-- Link
-
-The user does **not** manually enter priority.
-
-Priority is calculated automatically.
+The exact visual design should match the existing application's UI rather than introducing an unrelated design system.
 
 ---
 
-# 5. Optional Link Integration
+## 4. When the PWA Is Closed
 
-Each task can optionally contain a URL.
+This is a critical requirement.
 
-Examples:
+The reminder must not depend on the webpage remaining open.
 
-- College assignment portal
-- Google Drive
-- GitHub repository
-- YouTube tutorial
-- Documentation
-- Project website
+Do NOT rely on:
+
+```javascript
+setTimeout()
+setInterval()
+```
+
+as the primary scheduling mechanism.
+
+A browser page can be suspended or terminated, so these methods are not reliable for closed-app reminders.
+
+Investigate the appropriate browser/PWA notification and background mechanisms available on the target platform.
+
+If the current PWA architecture cannot reliably schedule and deliver a reminder while the application is completely closed, **do not fake the implementation**.
+
+Instead:
+
+1. Clearly identify the browser/PWA limitation.
+2. Preserve the existing PWA architecture.
+3. Propose the smallest possible native Android integration required for reliable background scheduling.
+4. Prefer a solution such as a lightweight **Capacitor/native Android layer** around the existing HTML/CSS/JavaScript application rather than rewriting the application.
+5. Keep the existing frontend and offline data architecture wherever possible.
+
+---
+
+## 5. When the User Is Using Another App
 
 Example:
 
 ```text
-Task:
-Submit CN Assignment
+User schedules reminder → 7:30 PM
 
-Due:
-September 20 — 6:00 PM
-
-Link:
-CN Assignment Portal
-```
-
-The link can be displayed:
-
-- On the task details page
-- Inside the task
-- In notifications
-- Through the Start action
-
-The system can optionally generate a display name from the website domain.
-
----
-
-# 6. UI Architecture
-
-The application should **NOT** place all functionality on a single page.
-
-It should use a **multi-page SPA architecture with React Router**.
-
-The browser still behaves like a modern single-page application, but navigation changes the active page/route without requiring a full browser reload.
-
-## Route Structure
-
-```text
-Smart Task Manager
-│
-├── /login
-│
-├── /dashboard
-│
-├── /tasks
-│   ├── /tasks/today
-│   ├── /tasks/upcoming
-│   ├── /tasks/overdue
-│   └── /tasks/completed
-│
-├── /tasks/new
-├── /tasks/:taskId
-├── /tasks/:taskId/edit
-│
-├── /calendar
-├── /focus
-├── /statistics
-└── /settings
-```
-
----
-
-# 7. Dynamic Navigation
-
-The dashboard acts as the starting point rather than containing every feature.
-
-For example:
-
-```text
-Dashboard
-   │
-   ├── Click "Today"
-   │       ↓
-   │   /tasks/today
-   │
-   ├── Click "Upcoming"
-   │       ↓
-   │   /tasks/upcoming
-   │
-   ├── Click "Overdue"
-   │       ↓
-   │   /tasks/overdue
-   │
-   ├── Click a Task
-   │       ↓
-   │   /tasks/:taskId
-   │
-   ├── Click "+ Add Task"
-   │       ↓
-   │   /tasks/new
-   │
-   ├── Click Calendar
-   │       ↓
-   │   /calendar
-   │
-   └── Click Settings
-           ↓
-       /settings
-```
-
-Each feature is therefore loaded/displayed when the user selects it.
-
----
-
-# 8. Dashboard Page
-
-Route:
-
-```text
-/dashboard
-```
-
-The dashboard should provide a concise overview.
-
-It should not contain every task-management feature.
-
-Example:
-
-```text
-┌──────────────────────────────────────────┐
-│ Smart Tasks                         ⚙    │
-│                                          │
-│ Good morning!                            │
-│                                          │
-│ ┌──────────┐ ┌──────────┐ ┌──────────┐  │
-│ │    3     │ │    5     │ │    1     │  │
-│ │  Today   │ │ Upcoming │ │ Overdue  │  │
-│ └──────────┘ └──────────┘ └──────────┘  │
-│                                          │
-│ 🔴 Complete CN Assignment                │
-│    Due tomorrow                          │
-│                                          │
-│ 🟠 DBMS Record                           │
-│    Due in 4 days                         │
-│                                          │
-│                    + Add Task            │
-└──────────────────────────────────────────┘
-```
-
-Clicking any summary card navigates to its corresponding page.
-
----
-
-# 9. Tasks Page
-
-Route:
-
-```text
-/tasks
-```
-
-Provides the overall task-management view.
-
-Possible navigation:
-
-```text
-All
-Today
-Upcoming
-Overdue
-Completed
-```
-
-Each selection navigates to its respective route rather than expanding every section on the same page.
-
----
-
-# 10. Today Page
-
-Route:
-
-```text
-/tasks/today
-```
-
-Displays tasks whose relevant deadline falls today.
-
-Example:
-
-```text
-← Today
-
-🚨 CRITICAL
-Submit CN Assignment
-Due 6:00 PM
-
-🔴 VERY HIGH
-Complete DBMS Record
-Due 9:00 PM
-```
-
----
-
-# 11. Upcoming Page
-
-Route:
-
-```text
-/tasks/upcoming
-```
-
-Displays active tasks that are not due today and are not overdue.
-
-Tasks still display their automatically calculated priority.
-
----
-
-# 12. Overdue Page
-
-Route:
-
-```text
-/tasks/overdue
-```
-
-Displays tasks whose deadlines have passed and which are not completed or cancelled.
-
-Example:
-
-```text
-← Overdue
-
-⚠️ OVERDUE
-Complete Project Report
-Was due Sep 17, 6:00 PM
-```
-
----
-
-# 13. Completed Page
-
-Route:
-
-```text
-/tasks/completed
-```
-
-Displays completed tasks separately from active tasks.
-
----
-
-# 14. Create Task Page
-
-Route:
-
-```text
-/tasks/new
-```
-
-Example:
-
-```text
-┌──────────────────────────────────────┐
-│ ← Add Task                           │
-│                                      │
-│ Task title                           │
-│ ┌──────────────────────────────────┐ │
-│ │ Complete CN Assignment           │ │
-│ └──────────────────────────────────┘ │
-│                                      │
-│ Due Date                             │
-│ [ September 20, 2026 ]              │
-│                                      │
-│ Due Time                             │
-│ [ 6:00 PM ]                         │
-│                                      │
-│ Optional Link                        │
-│ [ https://... ]                     │
-│                                      │
-│              [ Add Task ]            │
-└──────────────────────────────────────┘
-```
-
-Priority is not entered here.
-
-After the task is created, the priority engine calculates its current priority automatically.
-
----
-
-# 15. Task Details Page
-
-Route:
-
-```text
-/tasks/:taskId
-```
-
-The `:taskId` parameter identifies the selected task.
-
-Example:
-
-```text
-← Back
-
-Complete CN Assignment
-
-🔴 VERY HIGH
-
-Due
-September 20, 2026
-6:00 PM
-
-Status
-🔵 In Progress
-
-🔗 CN Assignment Portal
-
-────────────────────────
-
-[▶ Start]    [✓ Complete]
-
-[⏸ Snooze]   [📅 Reschedule]
-
-────────────────────────
-
-Created Sep 15
-Last updated Sep 18
-```
-
----
-
-# 16. Edit Task Page
-
-Route:
-
-```text
-/tasks/:taskId/edit
-```
-
-The selected task's existing information is loaded into the form.
-
-If the deadline changes, the priority engine automatically recalculates the task's priority.
-
----
-
-# 17. Calendar Page
-
-Route:
-
-```text
-/calendar
-```
-
-Provides a calendar-based view of tasks.
-
-Selecting a date can navigate to a relevant task/date view.
-
-Calendar functionality is an additional view and does not replace the main task pages.
-
----
-
-# 18. Focus Mode
-
-Route:
-
-```text
-/focus
-```
-
-Focus Mode displays the most relevant tasks based on urgency.
-
-Example:
-
-```text
-Focus Mode
-
-🚨 CRITICAL
-Submit Assignment
-
-🔴 VERY HIGH
-Prepare Presentation
-
-[Start Focus Session]
-```
-
----
-
-# 19. Statistics Page
-
-Route:
-
-```text
-/statistics
-```
-
-Possible information:
-
-- Completed tasks
-- Overdue tasks
-- Completion rate
-- Average completion time
-- Priority distribution
-- Task completion trends
-
-Statistics are secondary and should not clutter the main dashboard.
-
----
-
-# 20. Settings Page
-
-Route:
-
-```text
-/settings
-```
-
-Possible sections:
-
-```text
-Account
-Notifications
-Quiet Hours
-Priority Rules
-Connected Devices
-Synchronization
-Appearance
-```
-
----
-
-# 21. React Router Architecture
-
-React Router controls navigation between pages.
-
-Conceptually:
-
-```text
-Browser URL
-     ↓
-React Router
-     ↓
-Route Matching
-     ↓
-Corresponding Page Component
-     ↓
-Page-specific Components
-```
-
-Example:
-
-```text
-/tasks/abc123
-       ↓
-React Router
-       ↓
-TaskDetails.tsx
-       ↓
-Task ID = abc123
-       ↓
-Load task from IndexedDB
-       ↓
-Display Task Details
-```
-
----
-
-# 22. Suggested Frontend Structure
-
-```text
-client/src/
-│
-├── pages/
-│   ├── Login.tsx
-│   ├── Dashboard.tsx
-│   ├── Tasks.tsx
-│   ├── TodayTasks.tsx
-│   ├── UpcomingTasks.tsx
-│   ├── OverdueTasks.tsx
-│   ├── CompletedTasks.tsx
-│   ├── CreateTask.tsx
-│   ├── TaskDetails.tsx
-│   ├── EditTask.tsx
-│   ├── Calendar.tsx
-│   ├── FocusMode.tsx
-│   ├── Statistics.tsx
-│   └── Settings.tsx
-│
-├── components/
-│   ├── TaskCard.tsx
-│   ├── PriorityBadge.tsx
-│   ├── TaskStatus.tsx
-│   ├── TaskForm.tsx
-│   ├── NotificationPreview.tsx
-│   ├── Sidebar.tsx
-│   └── Header.tsx
-│
-├── routes/
-│   └── AppRoutes.tsx
-│
-├── db/
-│   └── database.ts
-│
-├── sync/
-│   └── syncEngine.ts
-│
-├── priority/
-│   └── priorityEngine.ts
-│
-└── notifications/
-    └── notificationManager.ts
-```
-
----
-
-# 23. Automatic Priority System
-
-Priority is **fully automated**.
-
-The user does not manually assign:
-
-- Low
-- Medium
-- High
-- Very High
-- Critical
-
-The system determines the priority from the remaining time before the deadline.
-
-## Default Rules
-
-| Remaining Time | Priority | Display |
-|---|---|---|
-| 15+ days | Low | Green |
-| 7–14 days | Medium | Yellow |
-| 3–6 days | High | Orange |
-| 1–2 days | Very High | Red |
-| Due today | Critical | Strong Red |
-| Past deadline | Overdue | Overdue styling |
-
-These thresholds can later become configurable.
-
----
-
-# 24. Priority Calculation Flow
-
-```text
-Deadline
-    ↓
-Current Local Time
-    ↓
-Time Remaining
-    ↓
-Priority Engine
-    ↓
-Current Priority
-```
-
-Example:
-
-```text
-Current:
-September 18 — 10:00 AM
-
-Deadline:
-September 30 — 6:00 PM
-
-Remaining time
-       ↓
-Priority = LOW
-```
-
-The calculation is performed locally so it continues working offline.
-
----
-
-# 25. Dynamic Priority Escalation
-
-Priority changes automatically as time passes.
-
-Example:
-
-```text
-15 days remaining
-       ↓
-LOW
-
-10 days remaining
-       ↓
-MEDIUM
-
-5 days remaining
-       ↓
-HIGH
-
-2 days remaining
-       ↓
-VERY HIGH
-
-Due today
-       ↓
-CRITICAL
-
-Deadline passed
-       ↓
-OVERDUE
-```
-
-The user does not need to edit the task.
-
----
-
-# 26. Dynamic Notification System
-
-Notifications are directly connected to the current priority.
-
-The system does not send the same reminder frequency for every task.
-
-## Reminder Behavior
-
-| Priority | Notification Frequency |
-|---|---|
-| Low | No frequent reminder / optional weekly |
-| Medium | Once daily |
-| High | Once daily |
-| Very High | Every 4 hours |
-| Critical | Every 4 hours |
-| Overdue | Separate overdue reminder schedule |
-
-The system becomes more persistent as a deadline approaches.
-
----
-
-# 27. Quiet Hours
-
-Regular task notifications should be delivered only between:
-
-```text
-7:00 AM → 11:00 PM
-```
-
-No regular notifications should be sent between:
-
-```text
-11:00 PM → 7:00 AM
-```
-
-Example:
-
-```text
-Scheduled reminder:
-2:30 AM
-
+At 7:30 PM:
+User is watching YouTube
         ↓
-
-Quiet hours detected
-
+Reminder notification appears
         ↓
-
-Notification suppressed
-
+User can tap the notification
         ↓
-
-Next allowed time:
-7:00 AM
+Application opens
+        ↓
+The relevant task/reminder is displayed
 ```
 
-The scheduler should resume reminders when the allowed notification window begins.
+The application must NOT attempt to draw a custom HTML bottom sheet over another application.
 
----
-
-# 28. Interactive Notifications
-
-Notifications should not be simple alerts.
-
-Example:
-
-```text
-🔴 VERY HIGH PRIORITY
-
-Complete CN Assignment
-
-Due tomorrow at 6:00 PM
-
-🔗 Open Assignment
-
-[✓ Done] [▶ Start] [⏸ Snooze] [📅 Reschedule]
-```
-
-The notification acts as a small task-control interface.
-
----
-
-# 29. Notification Actions
-
-## Done
-
-When the user clicks:
-
-```text
-✓ Done
-```
-
-The application:
-
-1. Changes the task status to Completed
-2. Records completion time
-3. Cancels future reminders
-4. Synchronizes the change when online
-
----
-
-## Start
-
-When the user clicks:
-
-```text
-▶ Start
-```
-
-The application:
-
-1. Changes status to In Progress
-2. Opens the application
-3. Optionally opens the associated task link
-
----
-
-## Snooze
-
-Snooze postpones the reminder without necessarily changing the task deadline.
-
-Possible choices:
-
-```text
-30 minutes
-1 hour
-4 hours
-Tomorrow
-```
-
----
-
-## Reschedule
-
-Reschedule changes the actual task deadline.
-
-Example:
-
-```text
-Original:
-September 20 — 6:00 PM
-
-New:
-September 22 — 6:00 PM
-```
-
-The priority engine recalculates the task after the deadline changes.
-
----
-
-# 30. Task Status
-
-Task status and notification actions are separate concepts.
-
-## Task statuses
-
-```text
-⭕ Not Started
-🔵 In Progress
-✅ Completed
-🚫 Cancelled
-```
-
-### Not Started
-
-The task exists but work has not started.
-
-### In Progress
-
-The user has started working on it.
-
-### Completed
-
-The task has been completed.
-
-### Cancelled
-
-The task is no longer required.
-
----
-
-# 31. Smart Start
-
-Smart Start is an advanced feature.
-
-The problem:
-
-> A reminder at 5:30 PM for a task due at 6:00 PM is not useful if the task normally takes two hours.
-
-Smart Start can eventually consider:
-
-```text
-Deadline
-+
-Estimated Duration
-+
-Current Priority
-=
-Recommended Start Time
-```
-
-Example:
-
-```text
-Deadline:
-6:00 PM
-
-Estimated duration:
-2 hours
-
-Recommended start:
-3:30 PM
-```
-
-The user should **not** be required to enter a duration every time.
-
-Possible future approaches:
-
-- Default duration by task category
-- User-defined defaults
-- Learn from previous completion times
-- Optional duration for important tasks
-
-Smart Start is an advanced feature and does not need to be part of the first MVP.
-
----
-
-# 32. Offline-First Architecture
-
-Offline operation is a core requirement.
-
-The following should work without internet:
-
-- Create tasks
-- Edit tasks
-- Delete tasks
-- Complete tasks
-- Change status
-- Add links
-- Edit links
-- Search tasks
-- Filter tasks
-- Calculate priority
-- Calculate reminder schedules
-- View tasks
-
-Internet is not required for normal task management.
-
----
-
-# 33. Local Data Storage
-
-Each device maintains its own local copy of task data.
-
-```text
-             Cloud Server
-                  │
-             Sync Engine
-              ↙       ↘
-         Laptop       Phone
-            │            │
-        IndexedDB    IndexedDB
-```
-
-The browser uses **IndexedDB** for persistent local storage.
-
-**Dexie.js** provides a developer-friendly abstraction over IndexedDB.
-
----
-
-# 34. Offline Task Creation
-
-Suppose the user creates a task while the phone has no internet.
-
-```text
-Create Task
-     ↓
-Save to IndexedDB
-     ↓
-Task immediately appears
-     ↓
-Add change to Sync Queue
-```
-
-The task is usable immediately.
-
----
-
-# 35. Synchronization
-
-When the device becomes connected:
-
-```text
-Internet detected
-       ↓
-Sync Queue starts
-       ↓
-Send local changes
-       ↓
-Server validates changes
-       ↓
-Server stores changes
-       ↓
-Download changes from other devices
-       ↓
-Update local IndexedDB
-```
-
----
-
-# 36. Cross-Device Example
-
-### Step 1 — Phone is offline
-
-User creates:
-
-```text
-Complete DBMS Assignment
-Due: Sep 25, 6 PM
-```
-
-The task is stored locally.
-
-### Step 2 — Phone reconnects
-
-The task is uploaded to the server.
-
-### Step 3 — Laptop connects
-
-The laptop downloads the task.
-
-### Step 4 — Laptop completes the task
-
-The user clicks:
-
-```text
-✓ Done
-```
-
-### Step 5 — Phone reconnects
-
-The completion status synchronizes back.
-
-Result:
-
-```text
-Phone:    Completed
-Laptop:   Completed
-Server:   Completed
-```
-
----
-
-# 37. Conflict Handling
-
-Offline synchronization creates an important distributed-state problem.
-
-Example:
-
-```text
-Laptop:
-Deadline = Sep 30
-
-Phone:
-Deadline = Oct 1
-```
-
-Both devices changed the same task while offline.
-
-The system should not blindly overwrite one change.
-
-It should use:
-
-- Stable task IDs
-- Version numbers
-- Updated timestamps
-- Device/change identifiers
-- Conflict detection
-- Defined resolution rules
-
-Conceptually:
-
-```text
-Local Change
-     ↓
-Version Check
-     ↓
-Conflict?
-   ↙     ↘
- No       Yes
- ↓          ↓
-Apply     Resolve
-```
-
-A future UI could show:
-
-```text
-Conflict detected
-
-Laptop changed deadline to:
-Sep 30, 6:00 PM
-
-Phone changed deadline to:
-Oct 1, 6:00 PM
-
-[Keep Laptop]
-[Keep Phone]
-```
-
----
-
-# 38. Local Priority Calculation
-
-Priority calculation should not depend entirely on the server.
-
-The device can calculate it locally.
-
-```text
-Local Current Time
-       ↓
-Task Deadline
-       ↓
-Time Remaining
-       ↓
-Priority Engine
-       ↓
-Priority
-       ↓
-Reminder Schedule
-```
-
-This is essential for offline functionality.
-
----
-
-# 39. PWA Architecture
-
-The application should be built as a **Progressive Web App**.
-
-## Laptop
-
-```text
-Browser
-   ↓
-Install PWA
-   ↓
-Desktop application-like experience
-```
-
-## Android
-
-```text
-Compatible Browser
-       ↓
-Install / Add to Home Screen
-       ↓
-Task Manager App
-```
-
-The same application can therefore serve both devices.
-
----
-
-# 40. Overall System Architecture
-
-```text
-                         SMART OFFLINE
-                         TASK MANAGER
-                              │
-             ┌────────────────┴────────────────┐
-             │                                 │
-        React PWA                         NestJS API
-             │                                 │
-      ┌──────┴──────┐                  ┌───────┴────────┐
-      │             │                  │                │
-   React Router  Service Worker     Prisma            Auth
-      │             │                  │
-   Dexie.js       Web Push         PostgreSQL
-      │
-  IndexedDB
-      │
-  Sync Queue
-      │
-      └──────────────→ API
-                         │
-                       Redis
-                         │
-                      BullMQ
-                         │
-                Notification Worker
-                         │
-                      Web Push
-                         │
-                  ┌──────┴──────┐
-                  ↓             ↓
-                Phone         Laptop
-```
-
----
-
-# 41. Final Technology Stack
-
-## Frontend
-
-### React
-
-Used to build the user interface.
-
-Why:
-
-- Component-based architecture
-- Large ecosystem
-- Strong industry relevance
-- Suitable for state-driven interfaces
-- Good PWA support
-
-### React Router
-
-Used for dynamic page navigation.
-
-Why:
-
-- Separate routes for major features
-- Dynamic task-detail URLs
-- Clean navigation
-- Maintains SPA behavior
-- Supports nested routes
-
-### TypeScript
-
-Used throughout the frontend and backend.
-
-Why:
-
-- Type safety
-- Better maintainability
-- Better API integration
-- Strong developer tooling
-
-### Vite
-
-Used as the frontend build tool.
-
-Why:
-
-- Fast development server
-- Fast builds
-- Simple configuration
-- Excellent React support
-
-### Tailwind CSS
-
-Used for UI styling.
-
-Why:
-
-- Fast UI development
-- Consistent design
-- Responsive layouts
-- Suitable for minimalist interfaces
-
----
-
-# 42. Local Database Stack
-
-## IndexedDB
-
-Browser-native persistent database.
-
-Used for:
-
-- Offline tasks
-- Local task state
-- Sync queue
-- User preferences
-- Cached application data
-
-## Dexie.js
-
-Abstraction layer over IndexedDB.
-
-Used to simplify:
-
-- Queries
-- Transactions
-- Schema management
-- Offline data operations
-
----
-
-# 43. PWA Technologies
-
-## Service Worker
-
-Responsible for:
-
-- Offline application caching
-- Push notification handling
-- Network fallback
-- Background web capabilities supported by the platform
-
-## Web App Manifest
-
-Defines:
-
-- Application name
-- Icons
-- Theme
-- Start URL
-- Display mode
-
-This enables installation as a PWA.
-
----
-
-# 44. Backend
-
-## Node.js
-
-Runtime environment for the backend.
-
-## NestJS
-
-Backend framework.
-
-Why:
-
-- TypeScript-first
-- Modular architecture
-- Dependency injection
-- Controllers/services/modules
-- Suitable for a serious portfolio project
-- Good REST API structure
-
----
-
-# 45. Database
-
-## PostgreSQL
-
-Primary server-side relational database.
-
-Stores:
-
-- Users
-- Tasks
-- Task statuses
-- Deadlines
-- Links
-- Device information
-- Synchronization metadata
-- Notification configuration
-- Version information
-
-PostgreSQL fits the structured relational nature of the application.
-
----
-
-# 46. Prisma
-
-Prisma acts as the ORM between NestJS and PostgreSQL.
-
-Responsibilities:
-
-- Database schema
-- Type-safe queries
-- Migrations
-- Relationships
-- CRUD operations
-
----
-
-# 47. Redis
-
-Redis is used for fast temporary/stateful backend operations.
-
-Possible uses:
-
-- Notification scheduling
-- Job queues
-- Rate limiting
-- Temporary synchronization state
-- Distributed locking where required
-
----
-
-# 48. BullMQ
-
-BullMQ provides background job processing using Redis.
-
-It is particularly useful for notifications.
-
-```text
-Task Deadline
-      ↓
-Priority Engine
-      ↓
-Reminder Schedule
-      ↓
-BullMQ Job
-      ↓
-Redis
-      ↓
-Notification Worker
-      ↓
-Web Push
-```
-
----
-
-# 49. Authentication and Security
-
-## JWT
-
-Used for authentication and API authorization.
-
-## Refresh Tokens
-
-Used to maintain sessions without requiring frequent logins.
-
-## Argon2
-
-Used to securely hash passwords.
-
-## Zod
-
-Used for request/input validation.
-
-Conceptually:
-
-```text
-Client Request
-      ↓
-Validation
-      ↓
-NestJS Controller
-      ↓
-Service
-      ↓
-Database
-```
-
----
-
-# 50. Notification Technology
-
-The notification system uses:
-
-- Web Push
-- Service Worker
-- Notification API
-- Redis
-- BullMQ
-
-The backend determines when a reminder should be sent.
-
-The service worker receives and displays supported push notifications.
-
----
-
-# 51. Notification Architecture
-
-```text
-                    Task
-                      ↓
-               Deadline Engine
-                      ↓
-                Time Remaining
-                      ↓
-                Priority Engine
-                      ↓
-              Current Priority
-                      ↓
-             Reminder Frequency
-                      ↓
-                   BullMQ
-                      ↓
-                    Redis
-                      ↓
-             Notification Worker
-                      ↓
-                  Web Push
-                      ↓
-             Service Worker
-                      ↓
-              User's Device
-```
-
----
-
-# 52. Example Notification Lifecycle
-
-Task:
-
-```text
-Complete CN Assignment
-Deadline:
-September 20 — 6:00 PM
-```
-
-As the deadline approaches:
-
-```text
-HIGH
-   ↓
-VERY HIGH
-   ↓
-CRITICAL
-   ↓
-OVERDUE
-```
-
-The notification frequency changes with the priority.
-
-Example critical notification:
-
-```text
-🚨 CRITICAL — Due Today
-
-Submit CN Assignment
-Due at 6:00 PM
-
-[🔗 Open Assignment]
-[✓ Done] [▶ Start] [⏸ Snooze] [📅 Reschedule]
-```
-
-Once completed:
-
-```text
-No more reminders
-```
-
----
-
-# 53. Conceptual Database Design
-
-## User
-
-```text
-User
-├── id
-├── name
-├── email
-├── passwordHash
-├── createdAt
-└── updatedAt
-```
-
-## Task
-
-```text
-Task
-├── id
-├── userId
-├── title
-├── description
-├── dueDate
-├── dueTime
-├── link
-├── linkName
-├── status
-├── createdAt
-├── updatedAt
-├── completedAt
-├── version
-└── deletedAt
-```
-
-## Device
-
-```text
-Device
-├── id
-├── userId
-├── deviceName
-├── deviceType
-├── pushSubscription
-├── lastSyncAt
-└── createdAt
-```
-
-## Sync Change
-
-```text
-SyncChange
-├── id
-├── taskId
-├── deviceId
-├── operation
-├── version
-├── timestamp
-└── payload
-```
-
-## Notification
-
-```text
-Notification
-├── id
-├── taskId
-├── scheduledAt
-├── sentAt
-├── notificationType
-└── status
-```
-
----
-
-# 54. API Responsibilities
-
-Possible REST APIs:
-
-```text
-POST   /auth/register
-POST   /auth/login
-POST   /auth/refresh
-
-GET    /tasks
-POST   /tasks
-GET    /tasks/:id
-PATCH  /tasks/:id
-DELETE /tasks/:id
-
-POST   /tasks/:id/complete
-POST   /tasks/:id/start
-POST   /tasks/:id/snooze
-POST   /tasks/:id/reschedule
-
-POST   /sync/push
-GET    /sync/pull
-
-POST   /notifications/subscribe
-DELETE /notifications/subscribe
-```
-
-The exact API design can be refined during implementation.
-
----
-
-# 55. Frontend Responsibilities
-
-The React application handles:
-
-- User interface
-- Dynamic routing
-- Task creation
-- Task editing
-- Task deletion
-- Task filtering
-- Task searching
-- Status changes
-- Local priority calculation
-- Local database access
-- Offline operation
-- Sync queue
-- Sync state
-- PWA installation
-- Service Worker communication
-
----
-
-# 56. Backend Responsibilities
-
-The backend handles:
-
-- Authentication
-- User accounts
-- Cloud task storage
-- Cross-device synchronization
-- Conflict detection
-- Push subscription management
-- Notification scheduling
-- Background jobs
-- Server-side validation
-- Security
-- API access control
-
----
-
-# 57. Application Startup Flow
-
-```text
-Open Application
-       ↓
-Load React PWA
-       ↓
-React Router determines page
-       ↓
-Load local IndexedDB data
-       ↓
-Calculate current priorities
-       ↓
-Display page
-       ↓
-Check network connectivity
-       ↓
-If Online → Synchronize
-       ↓
-Update IndexedDB
-       ↓
-Refresh relevant UI
-```
-
-The local interface should appear without waiting for the server.
-
----
-
-# 58. Sync Status UI
-
-The application should clearly communicate synchronization state.
-
-Examples:
-
-```text
-✓ Synced
-```
-
-```text
-↻ Syncing...
-```
-
-```text
-⚠ Offline — Changes saved locally
-```
-
-This is important because users need to know that offline changes have not been lost.
-
----
-
-# 59. Development Phases
-
-## Phase 1 — Offline MVP
-
-Build:
-
-- React
-- React Router
-- TypeScript
-- Vite
-- Tailwind CSS
-- IndexedDB
-- Dexie.js
-- PWA
-- Dynamic pages/routes
-- Task creation
-- Task editing
-- Task deletion
-- Task status
-- Automatic priority
-- Basic local functionality
-
-At the end of Phase 1:
-
-> The application works offline on one device.
-
----
-
-# 60. Phase 2 — Backend and Synchronization
-
-Add:
-
-- Node.js
-- NestJS
-- PostgreSQL
-- Prisma
-- JWT
-- Refresh Tokens
-- Argon2
-- Sync APIs
-- Device identification
-- Sync queue
-- Versioning
-- Conflict detection
-
-At the end of Phase 2:
-
-> Laptop and phone can synchronize tasks.
-
----
-
-# 61. Phase 3 — Advanced Notifications
-
-Add:
-
-- Redis
-- BullMQ
-- Web Push
-- Service Worker notifications
-- Dynamic reminder scheduling
-- Priority escalation
-- Quiet hours
-- Interactive notification actions
-- Snooze
-- Reschedule
-
-At the end of Phase 3:
-
-> The application automatically manages deadline reminders.
-
----
-
-# 62. Phase 4 — Production Engineering
-
-Add:
-
-- Docker
-- GitHub Actions
-- Automated testing
-- API documentation
-- Rate limiting
-- Logging
-- Error handling
-- Database indexing
-- Improved conflict resolution
-- Monitoring
-- Security hardening
-
----
-
-# 63. Testing Strategy
-
-## Unit Testing
-
-Use:
-
-**Vitest**
-
-Test:
-
-- Priority calculation
-- Deadline calculation
-- Reminder scheduling
-- Quiet-hour logic
-- Task state transitions
-- Sync conflict logic
-
-Example:
-
-```text
-Input:
-10 days remaining
-
-Expected:
-MEDIUM
-```
-
----
-
-# 64. End-to-End Testing
-
-Use:
-
-**Playwright**
-
-Test workflows such as:
-
-```text
-Create Task
-     ↓
-Set Deadline
-     ↓
-Priority Calculated
-     ↓
-Edit Task
-     ↓
-Complete Task
-     ↓
-Future Notifications Cancelled
-```
-
-Also test offline scenarios and navigation between dynamic routes.
-
----
-
-# 65. API Documentation
-
-Use:
-
-**Swagger / OpenAPI**
-
-Document:
-
-- Authentication
-- Task APIs
-- Sync APIs
-- Notification APIs
-- Device APIs
-
----
-
-# 66. Docker
-
-Docker can provide consistent development environments for:
-
-```text
-PostgreSQL
-Redis
-Backend
-```
-
-Example:
-
-```text
-Docker Compose
-│
-├── PostgreSQL
-├── Redis
-└── NestJS
-```
-
----
-
-# 67. CI/CD
-
-Use:
-
-**GitHub Actions**
-
-Automate:
-
-```text
-Push Code
-    ↓
-Install Dependencies
-    ↓
-Type Checking
-    ↓
-Unit Tests
-    ↓
-Build
-    ↓
-Additional Checks
-    ↓
-Deploy
-```
-
----
-
-# 68. Why This Is Not Just Another Todo App
-
-A conventional Todo application might look like:
-
-```text
-React
-  ↓
-REST API
-  ↓
-Database
-```
-
-This project introduces additional engineering challenges:
-
-```text
-React PWA
-    ↓
-IndexedDB
-    ↓
-Offline Sync Queue
-    ↓
-Conflict Resolution
-    ↓
-NestJS
-    ↓
-PostgreSQL
-    ↓
-Redis
-    ↓
-BullMQ
-    ↓
-Notification Worker
-    ↓
-Web Push
-```
-
-The major engineering concepts are:
-
-- Offline-first architecture
-- Distributed state synchronization
-- Conflict resolution
-- Dynamic deadline calculation
-- Background job scheduling
-- Push notifications
-- Cross-device state management
-- PWA architecture
-- Local-first data management
-
----
-
-# 69. Technologies Not Required Initially
-
-The project should not add technologies merely to make the stack appear complicated.
-
-The initial architecture does **not** require:
-
-- Kafka
-- Kubernetes
-- GraphQL
-- Microservices
-- AI/LLMs
-- Machine learning
-- Event streaming platforms
-- Complex cloud infrastructure
-
-These technologies may be valuable in other systems, but they do not solve the core problems of this application.
-
-The technical strength of this project should come from solving the actual offline, synchronization, scheduling, and notification problems properly.
-
----
-
-# 70. PWA Limitations
-
-A pure browser/PWA application has platform limitations regarding background execution and exact scheduled notifications.
-
-Browsers and mobile operating systems may restrict background activity to preserve battery.
+A normal PWA cannot arbitrarily display custom UI over another Android application.
 
 Therefore:
 
-```text
-PWA
-  ↓
-Good cross-platform solution
-```
-
-but:
-
-```text
-Native Android notification layer
-  ↓
-Potentially more reliable background scheduling
-```
-
-may eventually be preferable if extremely precise Android reminders become a requirement.
-
-The notification system should therefore remain modular so a native notification layer can be introduced later without rebuilding the entire application.
+- while the PWA is open → show the custom bottom-sheet;
+- while the PWA is closed/backgrounded → use the system notification mechanism;
+- when the user taps the notification → open the PWA/application and show the relevant task/reminder screen or bottom-sheet.
 
 ---
 
-# 71. Future Enhancements
+## 6. Lock Screen Behavior
 
-## Smart Start
+The reminder should be capable of appearing through the operating system's normal notification mechanism when the device is locked, subject to Android/Chrome/PWA platform restrictions.
 
-Automatically recommend when to begin tasks.
+Do not attempt to bypass Android's lock-screen security.
 
-## Calendar Integration
+The notification should follow the user's existing notification/privacy settings.
 
-Synchronize with external calendars.
+Do not expose sensitive task information on the lock screen if the operating system is configured to hide notification content.
 
-## Recurring Tasks
+---
 
-Support:
+## 7. Notification Actions
+
+Where supported by the platform, provide useful notification actions such as:
+
+- Done
+- Snooze
+- Open Task
+- Reschedule
+
+These actions should update the task/reminder state correctly.
+
+For example:
 
 ```text
-Daily
-Weekly
-Monthly
-Custom
+Reminder notification
+────────────────────────────
+📚 Complete Java Assignment
+
+[Done] [Snooze] [Open]
 ```
 
-## Subtasks
+If a particular notification action is not supported by the current PWA/browser environment, implement the closest reliable behavior rather than creating a fake action.
+
+---
+
+## 8. Snooze
+
+Implement configurable snooze functionality.
+
+Example options:
+
+- 5 minutes
+- 10 minutes
+- 15 minutes
+- 30 minutes
+- 1 hour
+- Custom time
+
+When the user selects Snooze:
+
+1. Mark the current reminder as snoozed.
+2. Store the new reminder time.
+3. Schedule the next reminder using the supported scheduling mechanism.
+4. Prevent duplicate notifications for the original reminder.
+
+---
+
+## 9. Reschedule
+
+The user must be able to change the reminder date/time.
+
+When a reminder is rescheduled:
+
+- cancel/replace the previous scheduled reminder,
+- store the new date/time,
+- create the new schedule,
+- prevent the old reminder from firing.
+
+---
+
+## 10. Offline Requirement
+
+The reminder system must work with the application's offline-first architecture.
+
+Task/reminder data should be stored locally.
+
+The application must not require an internet connection simply to determine that a locally scheduled reminder exists.
+
+Do not make a remote server/API call a mandatory dependency for local reminders.
+
+The existing local storage/database architecture should be inspected first.
+
+If IndexedDB is already used, prefer using the existing IndexedDB structure instead of introducing another unnecessary database.
+
+---
+
+## 11. Duplicate Prevention
+
+The system must prevent duplicate reminders.
+
+For every reminder, maintain a unique identifier.
 
 Example:
 
 ```text
-Complete Project
-├── Research
-├── Code
-├── Test
-└── Submit
+reminderId
+taskId
+scheduledAt
+status
+snoozeUntil
 ```
 
-## Categories
+The system should ensure that:
 
-Examples:
-
-```text
-College
-Personal
-Projects
-Work
-Learning
-```
-
-## Search
-
-Search by:
-
-- Title
-- Category
-- Link
-- Status
-- Deadline
-
-## Statistics
-
-Show:
-
-- Tasks completed
-- Overdue tasks
-- Completion rate
-- Average completion time
-- Priority distribution
-
-## Focus Mode
-
-Display only the most urgent tasks.
-
-## Adaptive Duration
-
-Learn how long similar tasks normally take based on historical completion data.
+- the same reminder is not scheduled twice,
+- reopening the application does not create duplicate notifications,
+- rescheduling removes/replaces the previous schedule,
+- snoozing does not leave the original reminder active,
+- completing a task cancels any future reminder associated with it.
 
 ---
 
-# 72. Final Complete Working Flow
+## 12. Time and Date Handling
 
-```text
-USER CREATES TASK
-       ↓
-Title + Date + Time + Optional Link
-       ↓
-Saved Immediately to IndexedDB
-       ↓
-Priority Engine Calculates Urgency
-       ↓
-Task Displayed With Priority Color
-       ↓
-Reminder Scheduler Determines Frequency
-       ↓
-Task Remains Available Offline
-       ↓
-Internet Becomes Available
-       ↓
-Sync Queue Sends Changes
-       ↓
-NestJS API
-       ↓
-PostgreSQL
-       ↓
-Other Devices Receive Changes
-       ↓
-Deadline Approaches
-       ↓
-Priority Automatically Escalates
-       ↓
-Reminder Frequency Increases
-       ↓
-BullMQ Schedules Notification
-       ↓
-Redis
-       ↓
-Notification Worker
-       ↓
-Web Push
-       ↓
-Phone / Laptop Notification
-       ↓
-User Selects:
-   ├── Done
-   ├── Start
-   ├── Snooze
-   └── Reschedule
-       ↓
-Task State Updated
-       ↓
-Future Reminders Adjusted/Cancelled
-       ↓
-Changes Synchronize Across Devices
-```
+Handle dates and times carefully.
+
+Requirements:
+
+- use the device's local time zone for user-facing reminders,
+- avoid manually adding/subtracting fixed timezone offsets,
+- correctly handle date changes,
+- correctly handle reminders scheduled for the next day,
+- correctly handle past reminders,
+- avoid duplicate firing after application restart.
+
+Store timestamps in a consistent format internally and convert them to local time for display.
 
 ---
 
-# 73. Final Technology Stack
+## 13. Permission Handling
 
-| Layer | Technology |
-|---|---|
-| UI | React |
-| Routing | React Router |
-| Language | TypeScript |
-| Build Tool | Vite |
-| Styling | Tailwind CSS |
-| Local Database | IndexedDB |
-| IndexedDB Wrapper | Dexie.js |
-| PWA | Service Worker + Web App Manifest |
-| Backend Runtime | Node.js |
-| Backend Framework | NestJS |
-| Server Database | PostgreSQL |
-| ORM | Prisma |
-| Cache / Queue Backend | Redis |
-| Background Jobs | BullMQ |
-| Authentication | JWT + Refresh Tokens |
-| Password Hashing | Argon2 |
-| Validation | Zod |
-| Notifications | Web Push + Notification API |
-| API Documentation | Swagger / OpenAPI |
-| Unit Testing | Vitest |
-| E2E Testing | Playwright |
-| Containers | Docker |
-| CI/CD | GitHub Actions |
-| Version Control | Git + GitHub |
+The application must request notification permission properly.
+
+Do not repeatedly ask for notification permission.
+
+Create an appropriate settings/state flow such as:
+
+```text
+Notifications
+────────────────────────
+✓ Notifications enabled
+
+Reminder notifications
+[ ON ]
+
+Default snooze
+[ 10 minutes ]
+
+Test notification
+[ Send test ]
+```
+
+If permission is denied:
+
+- explain that notifications are disabled,
+- provide a clear path to application/browser notification settings where possible,
+- do not crash,
+- do not pretend reminders are functioning when they cannot be delivered.
 
 ---
 
-# 74. Project Identity
+## 14. Notification Reliability
 
-## Project Type
+Before implementing the final solution, inspect the current project and determine:
 
-**Offline-first intelligent task management PWA**
+1. Is this currently a standard website or an installable PWA?
+2. Is there already a service worker?
+3. Is there already a Web App Manifest?
+4. Is HTTPS/secure context available?
+5. Is IndexedDB already being used?
+6. Is there an existing notification implementation?
+7. What browsers/devices are being targeted?
+8. Can the current PWA architecture reliably schedule a notification while completely closed on the target Android/Chrome environment?
 
-## Core Technical Concepts
+Do not assume that a service worker alone provides arbitrary exact-time background timers.
+
+Do not claim that a web-only implementation can guarantee exact closed-app reminders if the platform does not support that behavior.
+
+---
+
+## 15. Preferred Architecture
+
+First attempt to keep the architecture web/PWA-based:
 
 ```text
-Offline-First
-Cross-Device Synchronization
-Automatic Priority Escalation
-Dynamic Notifications
-Background Job Processing
-Push Notifications
-Conflict Resolution
-PWA
-Local-First Data
-Distributed State Synchronization
-Dynamic Routing
+Existing HTML/CSS/JavaScript
+            │
+            ├── Task Manager UI
+            │
+            ├── Local Database
+            │      └── Tasks + Reminders
+            │
+            ├── PWA Manifest
+            │
+            ├── Service Worker
+            │
+            └── Notification Layer
 ```
 
-## Core Product Principle
+If reliable closed-app scheduling is not possible with the current PWA/Chrome capabilities, extend it minimally:
 
-> **The user tells the system what needs to be done and when it is due. The system determines how urgently the user needs to be reminded.**
+```text
+Existing HTML/CSS/JavaScript
+            │
+            ├── Existing PWA UI
+            ├── Existing Offline Storage
+            │
+            └── Lightweight Android/Capacitor Layer
+                         │
+                         └── Native scheduled notifications
+```
 
-The result is a simple user interface backed by a technically advanced architecture.
+Do NOT rewrite the frontend unnecessarily.
+
+---
+
+## 16. Important Platform Constraint
+
+Do not promise this behavior:
+
+> "A PWA can always display a custom HTML popup over Instagram, YouTube, or any other application."
+
+That is not how normal web/PWA security works.
+
+The correct behavior is:
+
+```text
+PWA open
+    ↓
+Custom bottom-sheet
+
+PWA closed/backgrounded
+    ↓
+System notification
+    ↓
+User taps notification
+    ↓
+PWA/application opens
+    ↓
+Custom bottom-sheet/task view
+```
+
+If a native Android layer is introduced, investigate whether Android's supported notification APIs can provide a richer notification experience without violating normal notification behavior.
+
+Do not use intrusive overlay permissions unless there is a compelling, documented requirement and the user explicitly opts into such functionality.
+
+---
+
+## 17. UI/UX Requirements
+
+The reminder experience should feel like part of the existing application.
+
+The bottom sheet should:
+
+- animate smoothly from the bottom,
+- have clear task information,
+- show the scheduled/reminder time where useful,
+- have large touch-friendly buttons,
+- work on small phone screens,
+- support dark/light themes if the application already supports them,
+- be accessible,
+- not block the entire application unnecessarily,
+- close cleanly after Done/Dismiss,
+- restore correctly if the app is reopened.
+
+---
+
+## 18. Testing Requirements
+
+Create a testing checklist covering:
+
+### App open
+
+- [ ] Reminder fires at the configured time.
+- [ ] Bottom sheet appears.
+- [ ] Done works.
+- [ ] Dismiss works.
+- [ ] Snooze works.
+- [ ] Reschedule works.
+
+### App backgrounded
+
+- [ ] Reminder notification is delivered where supported.
+- [ ] Notification opens the correct task.
+- [ ] No duplicate notification occurs.
+
+### App closed
+
+- [ ] Test whether the selected platform/browser can deliver the reminder.
+- [ ] Do not claim success unless it is actually supported/tested.
+
+### Phone locked
+
+- [ ] Notification follows Android lock-screen settings.
+- [ ] No security/privacy settings are bypassed.
+
+### Silent mode
+
+- [ ] No forced sound.
+- [ ] No forced alarm behavior.
+- [ ] Normal notification behavior is respected.
+
+### Offline
+
+- [ ] Existing locally stored tasks remain available.
+- [ ] Reminder configuration does not require internet.
+- [ ] No unnecessary API dependency is introduced.
+
+### Edge cases
+
+- [ ] App restarted.
+- [ ] Device restarted, if supported by the chosen implementation.
+- [ ] Reminder edited.
+- [ ] Task completed before reminder.
+- [ ] Multiple reminders at similar times.
+- [ ] Snoozed reminder.
+- [ ] Rescheduled reminder.
+- [ ] Notification permission denied.
+- [ ] Notification permission later enabled.
+
+---
+
+## 19. Development Instructions for OpenCode
+
+Before changing code:
+
+1. Inspect the entire existing project structure.
+2. Identify the current frontend architecture.
+3. Identify the current storage/database implementation.
+4. Identify whether a service worker already exists.
+5. Identify the PWA manifest.
+6. Identify the current routing/navigation system.
+7. Identify any existing notification/reminder code.
+8. Explain the minimum changes required.
+9. Do not rewrite unrelated features.
+10. Preserve the existing UI and functionality.
+
+Then implement the reminder system incrementally.
+
+After implementation:
+
+- explain which files were changed,
+- explain why each change was made,
+- identify any browser/Android limitations,
+- provide exact steps for testing on an Android phone,
+- do not mark the feature as fully reliable unless the target environment has actually been tested.
+
+## Final Goal
+
+Build a **reliable offline task reminder system** that behaves like a normal notification rather than an alarm.
+
+The desired user experience is:
+
+```text
+Create Task
+     ↓
+Set Reminder
+     ↓
+Store locally
+     ↓
+Wait until scheduled time
+     ↓
+┌──────────────────────────────┐
+│ If app is open               │
+│ → Custom bottom-sheet        │
+└──────────────────────────────┘
+
+┌──────────────────────────────┐
+│ If app is closed/background  │
+│ → System notification        │
+│ → Tap notification            │
+│ → Open app + show task        │
+└──────────────────────────────┘
+```
+
+The system must prioritize **reliability, offline functionality, normal Android notification behavior, and respect for Silent mode** over attempting unsupported browser behavior.

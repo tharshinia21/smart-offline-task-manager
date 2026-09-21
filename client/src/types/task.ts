@@ -1,3 +1,13 @@
+export type ReminderStatus = 'scheduled' | 'sent' | 'snoozed' | 'completed' | 'cancelled'
+
+export type Reminder = {
+  reminderId: string
+  taskId: string
+  scheduledAt: number // timestamp
+  status: ReminderStatus
+  snoozeUntil?: number
+}
+
 export type TaskStatus = 'not_started' | 'in_progress' | 'completed' | 'cancelled'
 export type Priority = 'low' | 'medium' | 'high' | 'very_high' | 'critical' | 'overdue'
 
@@ -15,6 +25,10 @@ export interface Task {
   version: number
   deletedAt?: number
   snoozedUntil?: number
+  // Optional reminder time independent of due date/time
+  reminderAt?: number // timestamp (ms) — set via UI
+  // Reference to active reminder for offline dedup
+  activeReminderId?: string
 }
 
 export interface SyncQueueItem {

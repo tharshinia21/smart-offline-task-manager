@@ -4,7 +4,7 @@ import { Sidebar } from './components/Sidebar'
 import AppRoutes from './routes/AppRoutes'
 import { useEffect } from 'react'
 import { db } from './db/database'
-import { showBrowserNotification, subscribePush, syncPushSubscriptionToServer } from './notifications/notificationManager'
+import { showBrowserNotification, subscribePush } from './notifications/notificationManager'
 import { getPriority } from './priority/priorityEngine'
 import { fullSync } from './sync/syncEngine'
 
@@ -55,9 +55,9 @@ export default function App() {
     // initial sync if online & authenticated + push subscribe for background alarm
     if(navigator.onLine && localStorage.getItem('access_token')){
       fullSync().catch(()=>{})
-      if (Notification.permission==='granted') subscribePush().then(sub=>{ if(sub) syncPushSubscriptionToServer(sub as any)}).catch(()=>{})
+      if (Notification.permission==='granted') subscribePush().catch(()=>{})
     }
-    const onOnline = ()=> { if(localStorage.getItem('access_token')) { fullSync().catch(()=>{}); if(Notification.permission==='granted') subscribePush().then(sub=>{ if(sub) syncPushSubscriptionToServer(sub as any)}).catch(()=>{}) } }
+    const onOnline = ()=> { if(localStorage.getItem('access_token')) { fullSync().catch(()=>{}); if(Notification.permission==='granted') subscribePush().catch(()=>{}) } }
     window.addEventListener('online', onOnline)
     return ()=> { clearInterval(id); window.removeEventListener('online', onOnline) }
   }, [])

@@ -1,14 +1,16 @@
 import Dexie, { type Table } from 'dexie'
-import type { Task, SyncQueueItem } from '../types/task'
+import type { Task, SyncQueueItem, Reminder } from '../types/task'
 
 class TaskDatabase extends Dexie {
   tasks!: Table<Task, string>
+  reminders!: Table<Reminder, string>
   syncQueue!: Table<SyncQueueItem, number>
 
   constructor() {
     super('SmartTaskDB')
     this.version(1).stores({
       tasks: 'id, dueDate, status, updatedAt, createdAt',
+      reminders: '++reminderId, taskId, scheduledAt, status, snoozeUntil',
       syncQueue: '++id, taskId, timestamp',
     })
   }

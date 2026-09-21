@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db } from '../db/database'
-import { requestPermission, nextAllowedTime, subscribePush, syncPushSubscriptionToServer, unsubscribePush, showBrowserNotification } from '../notifications/notificationManager'
+import { requestPermission, nextAllowedTime, showBrowserNotification, subscribePush, unsubscribePush } from '../notifications/notificationManager'
 import { getPendingSyncCount, fullSync, isOnline } from '../sync/syncEngine'
 import { getUser, logout } from '../sync/auth'
 
@@ -18,13 +18,14 @@ export default function Settings(){
     const p=await requestPermission()
     setNotif(p)
     if(p==='granted' && localStorage.getItem('access_token')){
-      const sub=await subscribePush()
-      if(sub){ await syncPushSubscriptionToServer(sub as any); setPushOn(true); alert('Background alarm enabled (push subscribed)')}
+      await subscribePush()
+      setPushOn(true)
+      alert('Background alarm enabled (push subscribed)')
     }
   }
   const togglePush=async()=>{
     if(pushOn){ await unsubscribePush(); setPushOn(false); alert('Push unsubscribed - foreground only') }
-    else { const sub=await subscribePush(); if(sub){ await syncPushSubscriptionToServer(sub as any); setPushOn(true); alert('Push subscribed')} else alert('Push failed - check VAPID/HTTPS/permission')}
+    else { await subscribePush(); setPushOn(true); alert('Push subscribed') }
   }
   const testAlarm=async()=>{
     const v=(await import('../db/database')).db
